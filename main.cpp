@@ -47,16 +47,16 @@ const int baseHeight = 450;
 int screenWidth = baseWidth;
 int screenHeight = baseHeight;
 
-// Render texture for consistent rendering
-RenderTexture2D target;
-Rectangle sourceRec;
-Rectangle destRec;
-Vector2 origin;
+float scaleX = 1.0f;
+float scaleY = 1.0f;
 
-// Base sizes for game objects
+// Base sizes for game objects (in base resolution)
 const int basePlayerWidth = 80;
 const int basePlayerHeight = 40;
 const int baseFruitSize = 25;
+
+// Scaled sizes for game objects
+float playerWidth, playerHeight, fruitSize;
 
 // Textures
 Texture2D basketTexture;
@@ -66,12 +66,14 @@ Texture2D speedDownFruitTexture;
 Texture2D backgroundTexture;
 
 // Function to load and resize texture
-Texture2D LoadAndResizeTexture(const char *fileName, int newWidth, int newHeight)
+Texture2D LoadAndResizeTexture(char fileName[20], int newWidth, int newHeight)
 {
     Image image = LoadImage(fileName);
 
+    // Check if image loaded successfully
     if (image.data == NULL)
     {
+        // Create a fallback colored rectangle image
         UnloadImage(image);
         Image fallback = GenImageColor(newWidth, newHeight, RED);
         Texture2D texture = LoadTextureFromImage(fallback);
@@ -79,6 +81,7 @@ Texture2D LoadAndResizeTexture(const char *fileName, int newWidth, int newHeight
         return texture;
     }
 
+    // Resize image if needed
     if (image.width != newWidth || image.height != newHeight)
     {
         ImageResize(&image, newWidth, newHeight);
@@ -90,19 +93,16 @@ Texture2D LoadAndResizeTexture(const char *fileName, int newWidth, int newHeight
     return texture;
 }
 
-void InitRenderTexture()
+// Update scaling factors based on current screen size
+void UpdateScaling()
 {
-    target = LoadRenderTexture(baseWidth, baseHeight);
-    sourceRec = {0, 0, (float)baseWidth, (float)-baseHeight};
-    destRec = {0, 0, (float)screenWidth, (float)screenHeight};
-    origin = {0, 0};
-}
+    scaleX = (float)screenWidth / baseWidth;
+    scaleY = (float)screenHeight / baseHeight;
 
-void UpdateDestRec()
-{
-    screenWidth = GetScreenWidth();
-    screenHeight = GetScreenHeight();
-    destRec = {0, 0, (float)screenWidth, (float)screenHeight};
+    // Update scaled sizes
+    playerWidth = basePlayerWidth * scaleX;
+    playerHeight = basePlayerHeight * scaleY;
+    fruitSize = baseFruitSize * scaleX;
 }
 
 void Create_Fruit(float posx, float posy, int slot, int type = FRUIT_NORMAL)
@@ -111,7 +111,7 @@ void Create_Fruit(float posx, float posy, int slot, int type = FRUIT_NORMAL)
     fruitTypes[slot] = type;
     fruit_posx[slot] = posx;
     fruit_posy[slot] = posy;
-    fruit_hitbox[slot] = (Rectangle){posx, posy, baseFruitSize, baseFruitSize};
+    fruit_hitbox[slot] = (Rectangle){posx, posy, fruitSize, fruitSize};
 }
 
 int GetAvailableFruitSlot()
@@ -162,23 +162,23 @@ void SetupLevel(int level)
     switch (level)
     {
     case 1:
-        fruitFallSpeed = 1.5f;
+        fruitFallSpeed = 1.5f * scaleY;
         fruitsToCollect = 5;
         break;
     case 2:
-        fruitFallSpeed = 2.0f;
+        fruitFallSpeed = 2.0f * scaleY;
         fruitsToCollect = 8;
         break;
     case 3:
-        fruitFallSpeed = 2.5f;
+        fruitFallSpeed = 2.5f * scaleY;
         fruitsToCollect = 12;
         break;
     case 4:
-        fruitFallSpeed = 3.0f;
+        fruitFallSpeed = 3.0f * scaleY;
         fruitsToCollect = 15;
         break;
     case 5:
-        fruitFallSpeed = 3.5f;
+        fruitFallSpeed = 3.5f * scaleY;
         fruitsToCollect = 20;
         break;
     }
@@ -194,14 +194,14 @@ void ResetGame()
         fruit_posy[i] = 0;
     }
 
-    pX = (baseWidth - basePlayerWidth) / 2;
-    pY = baseHeight - 100;
-    player = (Rectangle){pX, pY, basePlayerWidth, basePlayerHeight};
+    pX = (screenWidth - playerWidth) / 2;
+    pY = screenHeight - 100 * scaleY;
+    player = (Rectangle){pX, pY, playerWidth, playerHeight};
 
     score = 0;
     fruitsCollected = 0;
     lives = 10;
-    playerSpeed = 3.0f;
+    playerSpeed = 3.0f * scaleX;
     speedEffectTimer = 0.0f;
     isSpeedBoosted = false;
     gameWon = false;
@@ -214,7 +214,7 @@ void SpawnRandomFruit()
     int slot = GetAvailableFruitSlot();
     if (slot != -1)
     {
-        float randomX = (float)(rand() % (baseWidth - baseFruitSize));
+        float randomX = (float)(rand() % (int)(screenWidth - fruitSize));
 
         int fruitType = FRUIT_NORMAL;
         int randomChance = rand() % 100;
@@ -237,12 +237,12 @@ void ApplySpeedEffect(int type)
     switch (type)
     {
     case FRUIT_SPEED_UP:
-        playerSpeed = 6.0f;
+        playerSpeed = 6.0f * scaleX;
         isSpeedBoosted = true;
         speedEffectTimer = 5.0f;
         break;
     case FRUIT_SPEED_DOWN:
-        playerSpeed = 1.5f;
+        playerSpeed = 1.5f * scaleX;
         isSpeedBoosted = false;
         speedEffectTimer = 3.0f;
         break;
@@ -255,30 +255,27 @@ void Draw_GameOver()
 {
     ClearBackground(BLACK);
 
-    int centerX = baseWidth / 2;
+    int centerX = screenWidth / 2;
 
-    DrawText("GAME OVER", centerX - MeasureText("GAME OVER", 40) / 2, baseHeight * 0.2, 40, RED);
-    DrawText(TextFormat("Final Score: %d", score), centerX - MeasureText(TextFormat("Final Score: %d", score), 30) / 2, baseHeight * 0.4, 30, WHITE);
-    DrawText(TextFormat("Level Reached: %d", currentLevel), centerX - MeasureText(TextFormat("Level Reached: %d", currentLevel), 25) / 2, baseHeight * 0.5, 25, WHITE);
+    DrawText("GAME OVER", centerX - MeasureText("GAME OVER", 40) / 2, screenHeight * 0.2, 40, RED);
+    DrawText(TextFormat("Final Score: %d", score), centerX - MeasureText(TextFormat("Final Score: %d", score), 30) / 2, screenHeight * 0.4, 30, WHITE);
+    DrawText(TextFormat("Level Reached: %d", currentLevel), centerX - MeasureText(TextFormat("Level Reached: %d", currentLevel), 25) / 2, screenHeight * 0.5, 25, WHITE);
 
-    Rectangle playAgainButton = {centerX - 175, baseHeight * 0.7, 150, 50};
+    Rectangle playAgainButton = {centerX - 175, screenHeight * 0.7, 150, 50};
     DrawRectangleRec(playAgainButton, GREEN);
     DrawText("PLAY AGAIN", playAgainButton.x + 15, playAgainButton.y + 15, 20, WHITE);
 
-    Rectangle menuButton = {centerX + 25, baseHeight * 0.7, 150, 50};
+    Rectangle menuButton = {centerX + 25, screenHeight * 0.7, 150, 50};
     DrawRectangleRec(menuButton, BLUE);
     DrawText("MAIN MENU", menuButton.x + 20, menuButton.y + 15, 20, WHITE);
 
     Vector2 mousePos = GetMousePosition();
-    // Adjust mouse position for render texture
-    Vector2 adjustedMousePos = {mousePos.x * baseWidth / screenWidth, mousePos.y * baseHeight / screenHeight};
-
-    if (CheckCollisionPointRec(adjustedMousePos, playAgainButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (CheckCollisionPointRec(mousePos, playAgainButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
         ResetGame();
         currentState = GAME;
     }
-    if (CheckCollisionPointRec(adjustedMousePos, menuButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (CheckCollisionPointRec(mousePos, menuButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
         currentState = MENU;
     }
@@ -288,21 +285,18 @@ void Draw_WinScreen()
 {
     ClearBackground(BLACK);
 
-    int centerX = baseWidth / 2;
+    int centerX = screenWidth / 2;
 
-    DrawText("CONGRATULATIONS!", centerX - MeasureText("CONGRATULATIONS!", 40) / 2, baseHeight * 0.2, 40, GOLD);
-    DrawText("YOU'VE WON THE GAME!", centerX - MeasureText("YOU'VE WON THE GAME!", 30) / 2, baseHeight * 0.35, 30, GOLD);
-    DrawText(TextFormat("Final Score: %d", score), centerX - MeasureText(TextFormat("Final Score: %d", score), 25) / 2, baseHeight * 0.5, 25, WHITE);
+    DrawText("CONGRATULATIONS!", centerX - MeasureText("CONGRATULATIONS!", 40) / 2, screenHeight * 0.2, 40, GOLD);
+    DrawText("YOU'VE WON THE GAME!", centerX - MeasureText("YOU'VE WON THE GAME!", 30) / 2, screenHeight * 0.35, 30, GOLD);
+    DrawText(TextFormat("Final Score: %d", score), centerX - MeasureText(TextFormat("Final Score: %d", score), 25) / 2, screenHeight * 0.5, 25, WHITE);
 
-    Rectangle menuButton = {centerX - 100, baseHeight * 0.7, 200, 50};
+    Rectangle menuButton = {centerX - 100, screenHeight * 0.7, 200, 50};
     DrawRectangleRec(menuButton, BLUE);
     DrawText("MAIN MENU", menuButton.x + 40, menuButton.y + 15, 20, WHITE);
 
     Vector2 mousePos = GetMousePosition();
-    // Adjust mouse position for render texture
-    Vector2 adjustedMousePos = {mousePos.x * baseWidth / screenWidth, mousePos.y * baseHeight / screenHeight};
-
-    if (CheckCollisionPointRec(adjustedMousePos, menuButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (CheckCollisionPointRec(mousePos, menuButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
         currentState = MENU;
     }
@@ -310,30 +304,26 @@ void Draw_WinScreen()
 
 void Draw_PauseMenu()
 {
-    // Draw semi-transparent overlay
-    DrawRectangle(0, 0, baseWidth, baseHeight, (Color){0, 0, 0, 180});
+    ClearBackground((Color){0, 0, 0, 200});
 
-    int centerX = baseWidth / 2;
+    int centerX = screenWidth / 2;
 
-    DrawText("GAME PAUSED", centerX - MeasureText("GAME PAUSED", 40) / 2, baseHeight * 0.3, 40, RED);
+    DrawText("GAME PAUSED", centerX - MeasureText("GAME PAUSED", 40) / 2, screenHeight * 0.3, 40, RED);
 
-    Rectangle resumeButton = {centerX - 100, baseHeight * 0.45, 200, 50};
+    Rectangle resumeButton = {centerX - 100, screenHeight * 0.45, 200, 50};
     DrawRectangleRec(resumeButton, GREEN);
     DrawText("RESUME", resumeButton.x + 60, resumeButton.y + 15, 20, WHITE);
 
-    Rectangle menuButton = {centerX - 100, baseHeight * 0.55, 200, 50};
+    Rectangle menuButton = {centerX - 100, screenHeight * 0.55, 200, 50};
     DrawRectangleRec(menuButton, BLUE);
     DrawText("MAIN MENU", menuButton.x + 40, menuButton.y + 15, 20, WHITE);
 
     Vector2 mousePos = GetMousePosition();
-    // Adjust mouse position for render texture
-    Vector2 adjustedMousePos = {mousePos.x * baseWidth / screenWidth, mousePos.y * baseHeight / screenHeight};
-
-    if (CheckCollisionPointRec(adjustedMousePos, resumeButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (CheckCollisionPointRec(mousePos, resumeButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
         currentState = GAME;
     }
-    if (CheckCollisionPointRec(adjustedMousePos, menuButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (CheckCollisionPointRec(mousePos, menuButton) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
         currentState = MENU;
     }
@@ -343,58 +333,59 @@ void Draw_Menu()
 {
     ClearBackground(BLACK);
 
-    int centerX = baseWidth / 2;
+    int centerX = screenWidth / 2;
 
-    DrawText("BASKET BLITZ", centerX - MeasureText("BASKET BLITZ", 40) / 2, baseHeight * 0.1, 40, RED);
+    DrawText("BASKET BLITZ", centerX - MeasureText("BASKET BLITZ", 40) / 2, screenHeight * 0.1, 40, RED);
 
-    Rectangle resetButton = {centerX - 100, baseHeight * 0.3, 200, 50};
+    Rectangle resetButton = {centerX - 100, screenHeight * 0.3, 200, 50};
     DrawRectangleRec(resetButton, ORANGE);
     DrawText("RESET GAME", resetButton.x + 35, resetButton.y + 15, 20, WHITE);
 
-    Rectangle playButton = {centerX - 100, baseHeight * 0.4, 200, 50};
+    Rectangle playButton = {centerX - 100, screenHeight * 0.4, 200, 50};
     DrawRectangleRec(playButton, BLUE);
     DrawText("PLAY GAME", playButton.x + 45, playButton.y + 15, 20, WHITE);
 
-    Rectangle fullscreenButton = {centerX - 100, baseHeight * 0.5, 200, 50};
+    Rectangle fullscreenButton = {centerX - 100, screenHeight * 0.5, 200, 50};
     DrawRectangleRec(fullscreenButton, isFullscreen ? PURPLE : DARKGRAY);
     DrawText(isFullscreen ? "FULLSCREEN: ON" : "FULLSCREEN: OFF", fullscreenButton.x + 10, fullscreenButton.y + 15, 20, WHITE);
 
     DrawText(TextFormat("Current Level: %d", currentLevel), 10, 10, 20, YELLOW);
 
     DrawText("Use A/D keys to move basket", centerX - MeasureText("Use A/D keys to move basket", 20) / 2, screenHeight * 0.75, 20, WHITE);
-    DrawText("Green: Normal  Blue: Speed+  Red: Speed-", centerX - MeasureText("Green: Normal  Blue: Speed+  Red: Speed-", 18) / 2, baseHeight * 0.8, 18, WHITE);
-    DrawText("Avoid missing fruits or you'll lose lives!", centerX - MeasureText("Avoid missing fruits or you'll lose lives!", 18) / 2, baseHeight * 0.85, 18, WHITE);
+    DrawText("Green: Normal  Blue: Speed+  Red: Speed-", centerX - MeasureText("Green: Normal  Blue: Speed+  Red: Speed-", 18) / 2, screenHeight * 0.8, 18, WHITE);
+    DrawText("Avoid missing fruits or you'll lose lives!", centerX - MeasureText("Avoid missing fruits or you'll lose lives!", 18) / 2, screenHeight * 0.85, 18, WHITE);
 
-    DrawText("Press F to toggle fullscreen", centerX - MeasureText("Press F to toggle fullscreen", 15) / 2, baseHeight * 0.92, 15, GRAY);
+    DrawText("Press F to toggle fullscreen", centerX - MeasureText("Press F to toggle fullscreen", 15) / 2, screenHeight * 0.92, 15, GRAY);
 
     Vector2 mousePos = GetMousePosition();
-    // Adjust mouse position for render texture
-    Vector2 adjustedMousePos = {mousePos.x * baseWidth / screenWidth, mousePos.y * baseHeight / screenHeight};
-
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
-        if (CheckCollisionPointRec(adjustedMousePos, playButton))
+        if (CheckCollisionPointRec(mousePos, playButton))
         {
             ResetGame();
             currentState = GAME;
         }
-        if (CheckCollisionPointRec(adjustedMousePos, resetButton))
+        if (CheckCollisionPointRec(mousePos, resetButton))
         {
             currentLevel = 1;
             SaveGame();
             ResetGame();
         }
-        if (CheckCollisionPointRec(adjustedMousePos, fullscreenButton))
+        if (CheckCollisionPointRec(mousePos, fullscreenButton))
         {
             ToggleFullscreen();
             isFullscreen = !isFullscreen;
-            UpdateDestRec();
+            screenWidth = GetScreenWidth();
+            screenHeight = GetScreenHeight();
+            UpdateScaling();
         }
     }
 }
 
 void Draw_Game()
 {
+    ClearBackground(BLACK);
+
     if (IsKeyPressed(KEY_P))
     {
         currentState = PAUSE;
@@ -404,7 +395,9 @@ void Draw_Game()
     {
         ToggleFullscreen();
         isFullscreen = !isFullscreen;
-        UpdateDestRec();
+        screenWidth = GetScreenWidth();
+        screenHeight = GetScreenHeight();
+        UpdateScaling();
     }
 
     if (speedEffectTimer > 0)
@@ -412,7 +405,7 @@ void Draw_Game()
         speedEffectTimer -= GetFrameTime();
         if (speedEffectTimer <= 0)
         {
-            playerSpeed = 3.0f;
+            playerSpeed = 3.0f * scaleX;
             isSpeedBoosted = false;
         }
     }
@@ -420,8 +413,8 @@ void Draw_Game()
     if (IsKeyDown(KEY_D))
     {
         pX += playerSpeed;
-        if (pX + player.width > baseWidth)
-            pX = baseWidth - player.width;
+        if (pX + player.width > screenWidth)
+            pX = screenWidth - player.width;
     }
     if (IsKeyDown(KEY_A))
     {
@@ -430,45 +423,45 @@ void Draw_Game()
             pX = 0;
     }
 
-    player = (Rectangle){pX, pY, basePlayerWidth, basePlayerHeight};
+    player = (Rectangle){pX, pY, playerWidth, playerHeight};
 
     static int spawnTimer = 0;
     spawnTimer++;
 
-    if (spawnTimer > 90 - (currentLevel * 10) && !gameWon)
+    if (spawnTimer > (90 - (currentLevel * 10)) / scaleY && !gameWon)
     {
         SpawnRandomFruit();
         spawnTimer = 0;
     }
 
-    // Draw background texture
-    DrawTexture(backgroundTexture, 0, 0, WHITE);
-
-    DrawText(TextFormat("Score: %d", score), 30, 15, 20, RED);
-    DrawText(TextFormat("Level: %d", currentLevel), 30, 45, 20, BLUE);
-    DrawText(TextFormat("Fruits: %d/%d", fruitsCollected, fruitsToCollect), 30, 75, 20, DARKGREEN);
-    DrawText(TextFormat("Lives: %d", lives), 30, 105, 20, ORANGE);
+    DrawText(TextFormat("Score: %d", score), 30 * scaleX, 15 * scaleY, (int)(20 * scaleY), RED);
+    DrawText(TextFormat("Level: %d", currentLevel), 30 * scaleX, 45 * scaleY, (int)(20 * scaleY), BLUE);
+    DrawText(TextFormat("Fruits: %d/%d", fruitsCollected, fruitsToCollect), 30 * scaleX, 75 * scaleY, (int)(20 * scaleY), DARKGREEN);
+    DrawText(TextFormat("Lives: %d", lives), 30 * scaleX, 105 * scaleY, (int)(20 * scaleY), ORANGE);
 
     if (isSpeedBoosted)
     {
-        DrawText("SPEED BOOST!", baseWidth - 150, 55, 15, BLUE);
+        DrawText("SPEED BOOST!", screenWidth - 150 * scaleX, 55 * scaleY, (int)(15 * scaleY), BLUE);
     }
-    else if (playerSpeed < 3.0f)
+    else if (playerSpeed < 3.0f * scaleX)
     {
-        DrawText("SLOWED DOWN!", baseWidth - 150, 55, 15, RED);
+        DrawText("SLOWED DOWN!", screenWidth - 150 * scaleX, 55 * scaleY, (int)(15 * scaleY), RED);
     }
 
-    DrawText("Press P to Pause", baseWidth - 180, 15, 15, GRAY);
-    DrawText("Press F for Fullscreen", baseWidth - 200, 35, 15, GRAY);
+    DrawText("Press P to Pause", screenWidth - 180 * scaleX, 15 * scaleY, (int)(15 * scaleY), GRAY);
+    DrawText("Press F for Fullscreen", screenWidth - 200 * scaleX, 35 * scaleY, (int)(15 * scaleY), GRAY);
 
-    // Draw player texture
-    DrawTexture(basketTexture, player.x, player.y, WHITE);
+    // Draw player texture (scaled)
+    DrawTexturePro(basketTexture,
+                   (Rectangle){0, 0, (float)basketTexture.width, (float)basketTexture.height},
+                   (Rectangle){player.x, player.y, playerWidth, playerHeight},
+                   (Vector2){0, 0}, 0, WHITE);
 
     for (int i = 0; i < MAX_FRUITS; i++)
     {
         if (fruits[i])
         {
-            // Draw fruit textures
+            // Draw fruit textures (scaled)
             Texture2D currentFruitTexture;
             switch (fruitTypes[i])
             {
@@ -483,7 +476,10 @@ void Draw_Game()
                 break;
             }
 
-            DrawTexture(currentFruitTexture, fruit_posx[i], fruit_posy[i], WHITE);
+            DrawTexturePro(currentFruitTexture,
+                           (Rectangle){0, 0, (float)currentFruitTexture.width, (float)currentFruitTexture.height},
+                           (Rectangle){fruit_posx[i], fruit_posy[i], fruitSize, fruitSize},
+                           (Vector2){0, 0}, 0, WHITE);
 
             fruit_posy[i] += fruitFallSpeed;
             fruit_hitbox[i].y = fruit_posy[i];
@@ -518,7 +514,7 @@ void Draw_Game()
                 }
             }
 
-            if (fruit_posy[i] > baseHeight)
+            if (fruit_posy[i] > screenHeight)
             {
                 if (fruitTypes[i] == FRUIT_NORMAL)
                 {
@@ -540,15 +536,13 @@ int main()
 {
     InitWindow(baseWidth, baseHeight, "Basket Blitz");
 
-    // Initialize render texture
-    InitRenderTexture();
+    UpdateScaling();
 
-    // Load textures
+    // Load and resize textures to base sizes
     basketTexture = LoadAndResizeTexture("basket.png", basePlayerWidth, basePlayerHeight);
     normalFruitTexture = LoadAndResizeTexture("fruit_normal.png", baseFruitSize, baseFruitSize);
     speedUpFruitTexture = LoadAndResizeTexture("fruit_speedup.png", baseFruitSize, baseFruitSize);
     speedDownFruitTexture = LoadAndResizeTexture("fruit_speeddown.png", baseFruitSize, baseFruitSize);
-    backgroundTexture = LoadAndResizeTexture("background.jpg", baseWidth, baseHeight);
 
     srand(time(NULL));
 
@@ -562,11 +556,10 @@ int main()
 
     while (!WindowShouldClose())
     {
-        UpdateDestRec();
+        screenWidth = GetScreenWidth();
+        screenHeight = GetScreenHeight();
 
-        // Draw to render texture
-        BeginTextureMode(target);
-
+        BeginDrawing();
         switch (currentState)
         {
         case MENU:
@@ -589,13 +582,6 @@ int main()
             }
             break;
         }
-
-        EndTextureMode();
-
-        // Draw render texture to screen
-        BeginDrawing();
-        ClearBackground(BLACK);
-        DrawTexturePro(target.texture, sourceRec, destRec, origin, 0, WHITE);
         EndDrawing();
     }
 
@@ -605,9 +591,6 @@ int main()
     UnloadTexture(speedUpFruitTexture);
     UnloadTexture(speedDownFruitTexture);
     UnloadTexture(backgroundTexture);
-
-    // Unload render texture
-    UnloadRenderTexture(target);
 
     CloseWindow();
 
